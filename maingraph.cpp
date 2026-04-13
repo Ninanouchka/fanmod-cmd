@@ -83,10 +83,12 @@ bool read_graph(maingraph & maing, string filename, bool directed,
             if (maxuv > maing.n) {
 				maing.n = maxuv;
                 if (gen_dumpfile && (maxuv > 65535)){
-                    wxLogMessage(wxString(wxT("In Line ")) << linenumber << wxT(", vertex number ") 
-                        << maxuv << wxT(" was specified.\nLargest vertex number allowed with ") 
-                        << wxT(" an activated subgraph dump is 65535."), 
-                        wxT("Exceeded vertex limit"), wxICON_ERROR | wxOK);
+                    std::cerr
+                    << "In Line " << linenumber << ", vertex number "
+                        << maxuv << " was specified.\n"
+                        << "Largest vertex number allowed with an activated subgraph dump is 65535.\n" 
+                        <<"Exceeded vertex limit"
+                        << std::endl;
                     return false;
                 }
 				if (num_neighbours.size() <= maing.n) {
@@ -122,24 +124,30 @@ bool read_graph(maingraph & maing, string filename, bool directed,
                     maing.num_vertex_colors = color_v;
                 // check color limits
                 if (has_edge_colors && edge_color == 0){
-                    wxLogMessage(wxString(wxT("In Line ")) << linenumber << wxT(", edge-color 0") 
-                        << wxT(" was given.\nThis color is not allowed - edges must always ")
-                        << wxT("have a color >=1."), 
-                        wxT("Exceeded color limits"), wxICON_ERROR | wxOK);
+                    std::cerr
+                    	<< "In Line " << linenumber << ", edge-color 0"
+                        << " was given.\nThis color is not allowed - edges must always "
+                        << "have a color >=1.\n"
+                        <<"Exceeded color limits"
+                        << std::endl;
                     return false;
                 }                
                 if (has_edge_colors && maing.num_edge_colors > edge_color_limit){
-                    wxLogMessage(wxString(wxT("In Line ")) << linenumber << wxT(", an edge-color >") 
-                        << edge_color_limit << wxT(" was given.\nLargest edge-color allowed with ") 
-                        << wxT("your settings is ") << edge_color_limit << wxT("."), 
-                        wxT("Exceeded color limits"), wxICON_ERROR | wxOK);
+                    std::cerr
+                    	<<"In Line " << linenumber << ", an edge-color >"
+                        << edge_color_limit << " was given.\nLargest edge-color allowed with "
+                        << "your settings is " << edge_color_limit
+                        <<".\nExceeded color limits"
+                        << std::endl;
                     return false;
                 }
                 if (has_vertex_colors && maing.num_vertex_colors > vertex_color_limit){
-                    wxLogMessage(wxString(wxT("In Line ")) << linenumber << wxT(", a vertex-color >") 
-                        << vertex_color_limit << wxT(" was given.\nLargest vertex-color allowed with ") 
-                        << wxT("your settings is ") << edge_color_limit << wxT("."),
-                        wxT("Exceeded color limits"), wxICON_ERROR | wxOK);
+                    std::cerr
+                    	<<"In Line " << linenumber << ", a vertex-color >"
+                        << vertex_color_limit << " was given.\nLargest vertex-color allowed with "
+                        << "your settings is " << edge_color_limit << ".\n"
+                        << "Exceeded color limits"
+                        << std::endl;
                     return false;
                 }
                 // set vertex colors
@@ -209,13 +217,20 @@ bool read_graph(maingraph & maing, string filename, bool directed,
                 }
 			}
 	    } else { // if ss.fail
-			wxMessageBox(wxString(wxT("Wrong format for input file \'")) << wxString(filename.c_str(),wxConvUTF8) << wxT("\' in line ") << linenumber << wxT("\nExpected line format is <int> <int> [<int>] [<int>] [<int>]."), wxT("Error reading file"), wxICON_ERROR | wxOK);
+			std::cerr
+				<<"Wrong format for input file \'" << filename.c_str()
+				<< "\' in line " << linenumber << "\nExpected line format is <int> <int> [<int>] [<int>] [<int>].\n"
+				<<"Error reading file"
+				<< std::endl;
             return false;
 		}
 		++linenumber;
 	}
     } else { // if !in.good
-		wxMessageBox(wxString(wxT("Unable to open file \'")) << wxString(filename.c_str(),wxConvUTF8) << wxT("\' for input."), wxT("Error reading file"), wxICON_ERROR | wxOK);
+		std::cerr
+			<<"Unable to open file \'" << filename.c_str() << "\' for input.\n"
+			<<"Error reading file"
+			<< std::endl;
 		return false;
     }
     ++maing.n;
@@ -383,8 +398,7 @@ uint64 est_tree_size(const maingraph & g, long* v_extension, uint64 TREESMPLS,
 double sampling(const maingraph & maing, long* v_extension, short G_N, 
                 bool fullenumeration, const double* prob, const uint64 equiv100p,
                 const int & perc_number, hash_map < graphcode64, uint64 > & result_graphs,
-                uint64 & count_subgr, wxFrame *frame, wxThread *thread,
-                randlib::rand &rand, bool gen_dumpfile, vector<subgraph>& subgraphdump)
+                uint64 & count_subgr, randlib::rand &rand, bool gen_dumpfile, vector<subgraph>& subgraphdump)
 {
 
 	// Init workgraph
@@ -392,10 +406,10 @@ double sampling(const maingraph & maing, long* v_extension, short G_N,
     init_graph(g,G_N,maing.num_vertex_colors,maing.num_edge_colors,maing.directed); 
 
     // Init for Statusbar
-    register int perc_index = 0;
-    wxCommandEvent percentage_event(wxEVT_COMMAND_MENU_SELECTED,
-                                    ID_PERCENT_REACHED);
-    percentage_event.SetInt(perc_number);
+    // register int perc_index = 0;
+    // wxCommandEvent percentage_event(wxEVT_COMMAND_MENU_SELECTED,
+                                    // ID_PERCENT_REACHED);
+    // percentage_event.SetInt(perc_number);
 
     // Init for main loop
 	count_subgr = 0;

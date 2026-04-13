@@ -23,7 +23,6 @@
 #include "maingraph.hpp"
 #include "output.hpp"
 #include "random.hpp"
-#include "tooltips.cpp"
 
 namespace po = boost::program_options;
 
@@ -207,7 +206,7 @@ int main(int argc, char** argv){
       // The frame and this thread are passed to send events and "TestDestroy()"
       sampling_time += sampling(maing, v_extension, G_N, fullenumeration, prob,
                                 equiv100p, perc_number, inter_result,
-                                count_subgr[nets_ctr], NULL, NULL, rand,
+                                count_subgr[nets_ctr], rand,
                                 subgraph_dumpfile, subgraphdump);
       total_subgr += count_subgr[nets_ctr];
 

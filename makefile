@@ -16,22 +16,22 @@ nauty $(NAUTY_DIR)/dreadnaut $(NAUTY_DIR)/nauty.a $(NAUTY_DIR)/nauty1.a $(NAUTY_
 	make -C $(NAUTY_DIR) checks
 
 main.o:main.cpp
-	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp `wx-config --cxxflags` main.cpp
+	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp main.cpp
 
 graph64.o:graph64.cpp
-	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp `wx-config --cxxflags` graph64.cpp
+	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp graph64.cpp
 
 output.o:output.cpp
-	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp `wx-config --cxxflags` output.cpp
+	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp output.cpp
 
 random.o:random.cpp
-	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp `wx-config --cxxflags` random.cpp
+	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp random.cpp
 
 maingraph.o:maingraph.cpp
-	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp `wx-config --cxxflags` maingraph.cpp
+	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp maingraph.cpp
 
 fanmod_cmd:main.o graph64.o output.o random.o maingraph.o
-	g++ -ggdb -o fanmod_cmd main.o graph64.o output.o random.o maingraph.o $(NAUTY_DIR)/nautyL1.a `wx-config --libs` -lboost_program_options
+	g++ -ggdb -o fanmod_cmd main.o graph64.o output.o random.o maingraph.o $(NAUTY_DIR)/nautyL1.a -lboost_program_options
 	strip fanmod_cmd
 
 fanmod:fanmod_cmd

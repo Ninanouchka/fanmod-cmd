@@ -1,13 +1,13 @@
 #ifndef MAINGRAPH_HPP
 #define MAINGRAPH_HPP
 
-#include <wx/wxprec.h>
-#ifdef __BORLANDC__
-        #pragma hdrstop
-#endif
-#ifndef WX_PRECOMP
-        #include <wx/wx.h>
-#endif
+// #include <wx/wxprec.h>
+// #ifdef __BORLANDC__
+//         #pragma hdrstop
+// #endif
+// #ifndef WX_PRECOMP
+//         #include <wx/wx.h>
+// #endif
 
 #include <iostream>
 using std::endl;
@@ -207,8 +207,7 @@ double sampling(const maingraph & maing, long* v_extension, short G_N,
                 bool fullenumeration, const double* prob,
                 const uint64 equiv100p, const int & perc_number,  
                 hash_map < graphcode64, uint64 > & result_graphs, 
-                uint64 & count_subgr, wxFrame *frame, wxThread *thread,
-                randlib::rand &rand, bool gen_dumpfile, vector<subgraph>& subgraphdump);
+                uint64 & count_subgr, randlib::rand &rand, bool gen_dumpfile, vector<subgraph>& subgraphdump);
                 
 double randomize_graph(maingraph & maing, short random_type,
                      int num_exchanges, int num_tries, 
