@@ -1,8 +1,8 @@
 #include "graph64.hpp"
 
-static DEFAULTOPTIONS(options);
-statsblk(stats);
-setword nauty_workspace[160*MAXM];
+// static DEFAULTOPTIONS(options);
+// statsblk(stats);
+// setword nauty_workspace[160*MAXM];
 set *nauty_gv;
 static const uint64 ZRO_V_BIT = 0x00UL;
 static const uint64 TWO_V_BIT = 0x01UL;
@@ -38,23 +38,23 @@ void init_graph(graph64 &g, short size, unsigned short num_vcolors,
 	if (num_ecolors > 3)   {g.num_edge_bits = 3; g.codestamp |= THR_E_BIT; }	
    
 	
-	g.g_N = (g.has_edge_colors) ? size*size : size;  // Graph is uncolored at edges
-	g.g_M = (g.g_N + WORDSIZE - 1) / WORDSIZE;
-	for (int i = 0; i != g.g_N; ++i) 
-		EMPTYSET( ( GRAPHROW(g.nauty_g, i, g.g_M) ) , g.g_M);
-	options.writeautoms = FALSE;
-	options.getcanon = TRUE;
+	// g.g_N = (g.has_edge_colors) ? size*size : size;  // Graph is uncolored at edges
+	// g.g_M = (g.g_N + WORDSIZE - 1) / WORDSIZE;
+	// for (int i = 0; i != g.g_N; ++i) 
+	// 	EMPTYSET( ( GRAPHROW(g.nauty_g, i, g.g_M) ) , g.g_M);
+	// options.writeautoms = FALSE;
+	// options.getcanon = TRUE;
 
-	options.defaultptn = (g.has_edge_colors || g.has_vertex_colors) ? FALSE : TRUE;
+	// options.defaultptn = (g.has_edge_colors || g.has_vertex_colors) ? FALSE : TRUE;
 	
-	if (directed) {
-		options.digraph = TRUE;
-		options.invarproc = adjacencies;
-		options.mininvarlevel = 1;
-		options.maxinvarlevel = 10;
-	}
+	// if (directed) {
+	// 	options.digraph = TRUE;
+	// 	options.invarproc = adjacencies;
+	// 	options.mininvarlevel = 1;
+	// 	options.maxinvarlevel = 10;
+	// }
 
-	nauty_check(WORDSIZE, g.g_M, g.g_N, NAUTYVERSIONID);
+	// nauty_check(WORDSIZE, g.g_M, g.g_N, NAUTYVERSIONID);
 
 }
 
@@ -64,15 +64,23 @@ graphcode64 toHashCode(graph64 &g) {
 	
 	if ((!g.has_vertex_colors) && (!g.has_edge_colors)) { //graph is not colored
 	
-		nauty(g.nauty_g, g.lab, g.ptn, NILSET, g.orbits, &options, &stats, 
-			  nauty_workspace, 160*MAXM, g.g_M, g.g_N, g.nauty_canon);
-			  
+		// Create nautypp graph from adjacency matrix
+		nautypp::Graph npp_g(g.size);
+		for (int i = 0; i != g.size; ++i) {
+			for (int j = i+1; j != g.size; ++j) {
+				if (get_element(g, i, j)) {
+					npp_g.link(i, j);
+				}
+			}
+		}
+		
+		// Read canonical adjacency matrix and build the hash
 		for (int a = 0; a != g.size; ++a) {
 			for (int b = 0; b != g.size; ++b) {
-                if (a!=b) {
+	            if (a!=b) {
 				   ret <<= 1;
-   				   ret |= get_element(g,g.lab[a],g.lab[b]);
-                }
+	   			   ret |= npp_g.has_edge(a, b) ? 1 : 0;
+	            }
 			}
 		}
 
@@ -85,30 +93,20 @@ graphcode64 toHashCode(graph64 &g) {
 		int index = 0;
 		uint32 sortarray[MAXN];
 
-		// Build vertex partition
-		if (g.has_vertex_colors) {
-			while (index != g.size) {
-				sortarray[index] = (0UL | index) | (g.matrix[index*8 +index] << 16);
-				++index;
-			}
-		} else {
-			while (index != g.size) {
-				sortarray[index] = index;
-				++index;
-			}
+		// Initialize sortarray with original vertices (for partition refinement)
+		for (int i = 0; i != g.size; ++i) {
+			sortarray[i] = (0UL | i) | (g.matrix[i*8 + i] << 16);
 		}
+		
+		// Add intermediate vertices for colored edges
 		register unsigned int edgecolor_ij;
-		//Build edge partition
 		if (g.has_edge_colors) {
 			for (int i = 0; i != g.size; ++i) {
 				for (int j = 0; j != g.size; ++j) {
-					if (i != j)
-					{
-						edgecolor_ij = get_element(g,i,j);
+					if (i != j) {
+						edgecolor_ij = get_element(g, i, j);
+						// Create intermediate vertex for colored edges (color > 1)
 						if (edgecolor_ij > 1) {
-							//add vertex to naugraph
-							 ADDELEMENT( ( GRAPHROW(g.nauty_g, i, g.g_M) ) , index);
-							 ADDELEMENT( ( GRAPHROW(g.nauty_g, index, g.g_M) ) , j);
 							sortarray[index] = (0UL | index) | (j<<8) | (i<<12) | (edgecolor_ij << 20);
 							++index;
 						}
@@ -116,55 +114,62 @@ graphcode64 toHashCode(graph64 &g) {
 				}
 			}
 		}
-		//Build fitting nauty partition
-		sort(sortarray,sortarray+index);
-		for (int i = 0; i != index; ++i)
-		{
-			g.lab[i] = sortarray[i] & 0x000000FF;
-			if (i != index-1) {
-				if ((sortarray[i] & 0x00FF0000) != (sortarray[i+1] & 0x00FF0000))
-					g.ptn[i] = 0;
-				else
-					g.ptn[i] = 1;
+		
+		// Create the auxiliary graph with original + intermediate vertices
+		nautypp::Graph npp_g(index);
+		
+		// Add uncolored edges (edge color = 1 or uncolored)
+		for (int i = 0; i != g.size; ++i) {
+			for (int j = i+1; j != g.size; ++j) {
+				unsigned int ecolor = get_element(g, i, j);
+				// Add if uncolored (0) or has color 1
+				if (ecolor == 0 || ecolor == 1) {
+					npp_g.link(i, j);
+				}
 			}
 		}
-		g.ptn[index-1] = 0; //ok since index always nonzero
-
-		//perform nauty
-		nauty(g.nauty_g, g.lab, g.ptn, NILSET, g.orbits, &options, &stats, 
-			  nauty_workspace, 160*MAXM, g.g_M, index, g.nauty_canon);
-
-		//1. g.lab contains permutation
 		
-		//2. Use this to get vertices/edges from g.matrix
+		// Add edges through intermediate vertices for colored edges
+		if (g.has_edge_colors) {
+			int inter_count = 0;
+			for (int i = 0; i != g.size; ++i) {
+				for (int j = 0; j != g.size; ++j) {
+					if (i != j) {
+						edgecolor_ij = get_element(g, i, j);
+						if (edgecolor_ij > 1) {
+							int intermediate_vertex = g.size + inter_count;
+							// Connect original vertices through intermediate vertex
+							npp_g.link(i, intermediate_vertex);
+							npp_g.link(intermediate_vertex, j);
+							inter_count++;
+						}
+					}
+				}
+			}
+		}
+		
+		// Extract hash from original vertices adjacency in canonical order
 		for (int a = 0; a != g.size; ++a) {
 			for (int b = 0; b != g.size; ++b) {
 				ret <<= (a==b) ? g.num_vertex_bits : g.num_edge_bits;
-				ret |= get_element(g,g.lab[a],g.lab[b]);
+				
+				if (a == b) {
+					// Vertex color from original matrix diagonal
+					ret |= get_element(g, a, a);
+				} else {
+					// Edge color from original matrix
+					ret |= get_element(g, a, b);
+				}
 			}
 		}
-        ret <<= 4;
-        
-        ret |= g.codestamp;
-          		
-		//3. Delete added vertices from the naugraph
-		unsigned short source, target, inter;
-		uint32 edge;
-		for (int i = g.size; i != index; ++i)
-		{
-			edge = sortarray[i];
-			source = (edge>>12) & 0x0F;
-			target = (edge>> 8) & 0x0F;
-			inter  = edge & 0xFF;
-			DELELEMENT( ( GRAPHROW(g.nauty_g, source, g.g_M) ) , inter);
-			DELELEMENT( ( GRAPHROW(g.nauty_g, inter, g.g_M) ) , target);
-		}
-
-
-
+		
+		ret <<= 4;
+		ret |= g.codestamp;
 	}
+	
 	return ret;
 }
+
 
 
 //
@@ -216,42 +221,53 @@ graphcode64 getGraphID(graph64 &g, graphcode64 gc) {
      
      gc >>= 4; // remove codestamp
      
-    graph nau_c[MAXN * MAXM];
-	graph nau_g[MAXN * MAXM];
-	short gn = g.size;
-	short gm = (gn + WORDSIZE - 1) / WORDSIZE;
-	for (int i = 0; i != g.g_N; ++i) 
-		EMPTYSET( ( GRAPHROW(nau_g, i, gm) ) , gm);	
+    // graph nau_c[MAXN * MAXM];
+	// graph nau_g[MAXN * MAXM];
+	// short gn = g.size;
+	// short gm = (gn + WORDSIZE - 1) / WORDSIZE;
+	// for (int i = 0; i != g.g_N; ++i) 
+	// 	EMPTYSET( ( GRAPHROW(nau_g, i, gm) ) , gm);	
 
-     for (int a = g.size-1; a >= 0; --a) {
-         for (int b = g.size-1; b >= 0; --b) {
-             if (a==b) {
-                gc >>= vbits;         
-             } else {
-				if ((gc & emsk) > 0)
-					ADDELEMENT( ( GRAPHROW(nau_g, a, gm) ) , b);
-                gc >>= ebits;
-             }
-         }
-     }  
-     
-     options.defaultptn = TRUE;
-     
- 	 nauty(nau_g, g.lab, g.ptn, NILSET, g.orbits, &options, &stats, 
-			  nauty_workspace, 160*MAXM, gm, gn, nau_c);
-     
-     options.defaultptn = (g.has_edge_colors || g.has_vertex_colors) ? FALSE : TRUE;
-     
-     graphcode64 ret = 0;     
-     
+    // Reconstruct the adjacency matrix from the compressed hash code
+	for (int a = g.size-1; a >= 0; --a) {
+		for (int b = g.size-1; b >= 0; --b) {
+			if (a == b) {
+				gc >>= vbits;         
+			} else {
+				unsigned short ecolor = gc & emsk;
+				if (ecolor > 0) {
+					set_element(g, a, b, ecolor);
+				}
+				gc >>= ebits;
+			}
+		}
+	}
+	
+	// Create nautypp graph from reconstructed adjacency matrix
+	nautypp::Graph npp_g(g.size);
+	
+	// Populate edges from the reconstructed matrix
+	for (int i = 0; i != g.size; ++i) {
+		for (int j = i+1; j != g.size; ++j) {
+			unsigned short edge_val = get_element(g, i, j);
+			if (edge_val > 0) {
+				npp_g.link(i, j);
+			}
+		}
+	}
+	
+	// nautypp computes canonical form internally
+	// Extract the canonical adjacency matrix and return its hash
+	graphcode64 ret = 0;
+	
 	for (int a = 0; a != g.size; ++a) {
 		for (int b = 0; b != g.size; ++b) {
-		   ret <<= 1;
-		   if ( ISELEMENT( ( GRAPHROW(nau_c, a, gm) ) , b) ) 
-		       ret |= 1;
+			ret <<= 1;
+			if (npp_g.has_edge(a, b)) {
+				ret |= 1;
+			}
 		}
-	}     
-     
-     
-	 return ret;
+	}
+	
+	return ret;
 }

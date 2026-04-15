@@ -173,17 +173,17 @@ int main(int argc, char** argv){
     }
 
     // Main enumeration / sampling loop
-    int total_num_nets = num_r_nets + 1; // We sample num_r_nets and the original graph
+    int total_num_nets = num_r_nets + 1; // sample num_r_nets and the original graph
     // In this hashmap, the intermediate result is stored before entered into the result - hashmap.
     hash_map < graphcode64, uint64 > inter_result;
-    // In this hashmap, the results of the sampling and the randomization are stored.
+    // In this hashmap, the results of the sampling and the randomization are stored
     hash_map < graphcode64, uint64* > result_graphs;
     uint64 *count_subgr = new uint64[total_num_nets];
     uint64 total_subgr = 0;
     double sampling_time = 0.0, random_time = 0.0;
     uint64 *current_array; // Abbrevation for the array currently updated
 
-    // Sample the original graph and random graphs, if necessary.
+    // Sample the original graph and random graphs
     EdgeContainer EC;
     uint64 equiv100p = fullenumeration ? numtrees : SMPLS;
 

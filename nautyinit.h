@@ -3,9 +3,6 @@
 
 #define MAXN 64
 
-extern "C" {
-   #include "nauty/nauty27r3/nauty.h"
-   #include "nauty/nauty27r3/nautinv.h"
-}
+#include <nautypp/nautypp>
 
 #endif

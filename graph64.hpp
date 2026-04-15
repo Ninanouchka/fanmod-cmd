@@ -24,6 +24,8 @@ typedef struct
 	unsigned short num_edge_bits;
 	bool directed;
 	uint64 codestamp;
+	// Note: nauty-specific buffers below are kept for compatibility with other functions
+	// but are NOT used in toHashCode() and getGraphID() which use nautypp instead
 	graph nauty_canon[MAXN * MAXM];
 	graph nauty_g[MAXN * MAXM];
 	int lab[MAXN], ptn[MAXN], orbits[MAXN];
@@ -41,8 +43,7 @@ void readHashCode(graph64 &g, graphcode64 gc);
 graphcode64 getGraphID(graph64 &g, graphcode64 gc); 
 
 inline void delete_edge(graph64 &g, short source, short target) {
-	g.matrix[(source<<3)|target] = 0; //g.matrix[u*8+v] = 0;
-	DELELEMENT( ( GRAPHROW(g.nauty_g, source, g.g_M) ) , target);
+	g.matrix[(source<<3)|target] = 0;
 }
 
 inline void delete_vertex(graph64 &g, short idx) {
@@ -51,22 +52,18 @@ inline void delete_vertex(graph64 &g, short idx) {
 
 inline void delete_element(graph64 &g, short row, short col) {
 	g.matrix[(row<<3)|col] = 0;
-	DELELEMENT( ( GRAPHROW(g.nauty_g, row, g.g_M) ) , col);
 }
 
 inline void set_edge(graph64 &g, short source, short target) {
 	g.matrix[(source<<3)|target] = 1;
-	ADDELEMENT( ( GRAPHROW(g.nauty_g, source, g.g_M) ) , target);
 }
 
 inline void set_edge(graph64 &g, short source, short target, short color) {
 	g.matrix[(source<<3)|target] = color;
-	ADDELEMENT( ( GRAPHROW(g.nauty_g, source, g.g_M) ) , target);
 }
 
 inline void set_element(graph64 &g, short source, short target, short color) {
 	g.matrix[(source<<3)|target] = color;
-	ADDELEMENT( ( GRAPHROW(g.nauty_g, source, g.g_M) ) , target);
 }
 
 inline void color_vertex(graph64 &g, short idx, short color) {
