@@ -31,7 +31,7 @@ maingraph.o:maingraph.cpp
 	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp maingraph.cpp
 
 fanmod_cmd:main.o graph64.o output.o random.o maingraph.o
-	g++ -ggdb -o fanmod_cmd main.o graph64.o output.o random.o maingraph.o $(NAUTY_DIR)/nautyL1.a -lboost_program_options
+	g++ -ggdb -o fanmod_cmd main.o graph64.o output.o random.o maingraph.o $(NAUTY_DIR)/nautyL1.a -lboost_program_options -pthread
 	strip fanmod_cmd
 
 fanmod:fanmod_cmd

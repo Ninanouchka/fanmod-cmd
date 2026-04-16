@@ -15,6 +15,8 @@
 #include <string>
 #include <csignal>
 #include <stdlib.h>
+#include <thread>
+#include <vector>
 
 #include <stdio.h>
 #include <unistd.h>
@@ -39,6 +41,104 @@ uint64 calc_expected_samples(double ntrees, const short & G_N, const double *pro
     return (uint64)(ntrees+0.5);
 }
 
+// ---------------------------------------------------------------------------
+// Per-thread result container
+// ---------------------------------------------------------------------------
+struct RandomNetResult {
+    hash_map<graphcode64, uint64> inter_result;
+    uint64 count_subgr   = 0;
+    double sampling_time = 0.0;
+    double random_time   = 0.0;
+    long   tries         = 0;
+    long   success       = 0;
+};
+
+// ---------------------------------------------------------------------------
+// Build an EdgeContainer from a (possibly cloned) maingraph.
+// Extracted from the original nets_ctr==0 branch so threads can call it
+// independently on their own graph copies.
+// ---------------------------------------------------------------------------
+static void populate_EC(const maingraph& g, EdgeContainer& ec,
+                        short random_type,
+                        bool vertex_color_matters, bool edge_color_matters)
+{
+    short color_u = 1, color_v = 1, color_uv, color_vu;
+    for (hash_map<edge, edgetype>::const_iterator iter = g.edges.begin();
+         iter != g.edges.end(); ++iter) {
+        const edge e = iter->first;
+        if (vertex_color_matters) {
+            color_u = g.vertex_colors[edge_get_u(e)];
+            color_v = g.vertex_colors[edge_get_v(e)];
+        }
+        const edgetype et = iter->second;
+        if (edge_color_matters) {
+            color_uv = get_color_u_v(et);
+            color_vu = get_color_v_u(et);
+        } else {
+            color_uv = et & DIR_U_T_V;
+            color_vu = (et & DIR_V_T_U) >> 1;
+        }
+        switch (random_type) {
+            case NO_REGARD:
+                if ((et & DIR_U_T_V) == DIR_U_T_V)
+                    ec.put(new_edge(edge_get_u(e), edge_get_v(e)),
+                           getBagID(color_uv, 0, color_u, color_v));
+                if ((et & DIR_V_T_U) == DIR_V_T_U)
+                    ec.put(new_edge(edge_get_v(e), edge_get_u(e)),
+                           getBagID(0, color_vu, color_u, color_v));
+                break;
+            case GLOBAL_CONST:
+                ec.loggedPut(e, getBagID(color_uv, color_vu, color_u, color_v));
+                break;
+            case LOCAL_CONST:
+                ec.put(e, getBagID(color_uv, color_vu, color_u, color_v));
+                break;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Thread work unit: clone orig_maing, randomize it, enumerate it, return results.
+// All state is local – nothing is shared with other threads during execution.
+// ---------------------------------------------------------------------------
+static RandomNetResult run_random_net(
+    const maingraph& orig_maing,
+    short G_N, bool fullenumeration, const double* prob,
+    uint64 equiv100p, int perc_number,
+    short random_type, int num_exchanges, int num_tries,
+    bool vertex_color_matters, bool edge_color_matters,
+    long seed)
+{
+    RandomNetResult res;
+
+    // Independent copy of the graph – no sharing with other threads
+    maingraph local = clone_maingraph(orig_maing);
+
+    // Per-thread RNG seeded uniquely
+    randlib::rand local_rand(seed);
+
+    // Per-thread EdgeContainer built from the local copy
+    EdgeContainer local_EC;
+    populate_EC(local, local_EC, random_type, vertex_color_matters, edge_color_matters);
+
+    // Randomize and enumerate
+    res.random_time = randomize_graph(local, random_type, num_exchanges, num_tries,
+                                      vertex_color_matters, edge_color_matters,
+                                      local_EC, res.tries, res.success, local_rand);
+    // randomize_graph calls build_graph internally, so local.maxnumneighbours is updated
+
+    long* v_ext = new long[local.maxnumneighbours * G_N];
+    vector<subgraph> dummy_dump;
+    res.sampling_time = sampling(local, v_ext, G_N, fullenumeration, prob,
+                                 equiv100p, perc_number,
+                                 res.inter_result, res.count_subgr,
+                                 local_rand, false, dummy_dump);
+
+    delete[] v_ext;
+    free_maingraph(local);
+    return res;
+}
+
 int main(int argc, char** argv){
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -48,6 +148,7 @@ int main(int argc, char** argv){
       ("directed,d", "the graph input is directed")
       ("motif_size,s", po::value<int>(), "the size of the searched motifs. default = 4")
       ("rnd_nets,r", po::value<int>(), "the amount of random nets to compare the motif frequency. default = 1000")
+      ("threads,t", po::value<int>(), "number of parallel threads for random-graph generation (default: hardware concurrency)")
   ;
 
   po::variables_map vm;
@@ -78,7 +179,6 @@ int main(int argc, char** argv){
     bool edge_color_matters = false;
     int num_exchanges = 3;
     int num_tries = 3;
-    bool reest_size = false;
     bool text_output = false;
     bool gen_dumpfile = false;
 
@@ -88,6 +188,14 @@ int main(int argc, char** argv){
       G_N = vm["motif_size"].as<int>();
     if(vm.count("rnd_nets"))
       num_r_nets = vm["rnd_nets"].as<int>();
+
+    // Number of parallel threads for random-net generation+enumeration
+    int num_threads = (int)std::thread::hardware_concurrency();
+    if (num_threads < 1) num_threads = 1;
+    if (vm.count("threads"))
+      num_threads = vm["threads"].as<int>();
+    if (num_r_nets > 0 && num_threads > (int)num_r_nets)
+      num_threads = (int)num_r_nets;
 
     // Some vars which are necessary, but not params
     uint64 SMPLS = 1000000;
@@ -181,148 +289,145 @@ int main(int argc, char** argv){
     uint64 *count_subgr = new uint64[total_num_nets];
     uint64 total_subgr = 0;
     double sampling_time = 0.0, random_time = 0.0;
-    uint64 *current_array; // Abbrevation for the array currently updated
+    uint64 *current_array; // Abbreviation for the array currently updated
 
-    // Sample the original graph and random graphs, if necessary.
-    EdgeContainer EC;
     uint64 equiv100p = fullenumeration ? numtrees : SMPLS;
 
-    for (int nets_ctr = 0; nets_ctr < total_num_nets; ++nets_ctr){
+    // -----------------------------------------------------------------------
+    // Phase 0: enumerate / sample the original graph on the main thread
+    // -----------------------------------------------------------------------
+    {
+        vector<subgraph> subgraphdump;
+        const bool subgraph_dumpfile = gen_dumpfile; // nets_ctr == 0
 
-       // Reestimates tree-size if the user wishes.
-       // and it is not the original network being sampled
-       if (reest_size && nets_ctr != 0 && TREESMPLS > 0) {
-           numtrees = est_tree_size(maing, v_extension, TREESMPLS, G_N, rand) / TREESMPLS * maing.n;
-	       if (!fullenumeration) SMPLS = calc_expected_samples(double(numtrees), G_N, prob);
-       }
+        sampling_time += sampling(maing, v_extension, G_N, fullenumeration, prob,
+                                  equiv100p, perc_number, inter_result,
+                                  count_subgr[0], rand,
+                                  subgraph_dumpfile, subgraphdump);
+        total_subgr += count_subgr[0];
 
-      //Create vector where subgraphs can be dumped to
-      vector<subgraph> subgraphdump;
-      const bool subgraph_dumpfile = (gen_dumpfile && (nets_ctr == 0));
+        // Write the subgraph dump
+        if (subgraph_dumpfile) {
+            std::ofstream dumpfile ((outputfile+".dump").c_str());
+            dumpfile << "Number of subgraphs: " << subgraphdump.size() << endl;
+            dumpfile << "Format: adjacency matrix, <participating vertices>" << endl;
+            graph64* g_ptr = new graph64;
+            graph64& g = *g_ptr;
+            init_graph(g,G_N,maing.num_vertex_colors,maing.num_edge_colors,maing.directed);
+            for (vector<subgraph>::const_iterator iter = subgraphdump.begin();
+                             iter != subgraphdump.end(); ++iter) {
+                readHashCode(g, iter->gc);
+                for (short i = 0; i != G_N; ++i)
+                    for (int j = 0; j != G_N; ++j)
+                        dumpfile << num_to_lett[get_element(g,i,j)];
+                for (short i = 0; i != G_N; ++i)
+                    dumpfile << "," << getvertex(*iter,i);
+                dumpfile << endl;
+            }
+            dumpfile.close();
+            subgraphdump.clear();
+            delete g_ptr;
+        }
 
-      // Sample the graph
-      // sampling is called with its options,
-      // true to show the status-bar and inter_result and count_subgr as result-parameters
-      // The frame and this thread are passed to send events and "TestDestroy()"
-      sampling_time += sampling(maing, v_extension, G_N, fullenumeration, prob,
-                                equiv100p, perc_number, inter_result,
-                                count_subgr[nets_ctr], rand,
-                                subgraph_dumpfile, subgraphdump);
-      total_subgr += count_subgr[nets_ctr];
-
-      //Write the subgraph dump
-      if (subgraph_dumpfile) {
-           //TO DO
-           //string outputfile
-           std::ofstream dumpfile ((outputfile+".dump").c_str());
-           dumpfile << "Number of subgraphs: " << subgraphdump.size() << endl;
-           dumpfile << "Format: adjacency matrix, <participating vertices>" << endl;
-           graph64* g_ptr = new graph64;
-           graph64& g = *g_ptr;
-           init_graph(g,G_N,maing.num_vertex_colors,maing.num_edge_colors,maing.directed);
-           for (vector<subgraph>::const_iterator iter = subgraphdump.begin();
-	                             iter !=subgraphdump.end(); ++iter) {
-               readHashCode(g, iter->gc);
-               for (short i = 0; i != G_N; ++i) {
-                   for (int j = 0; j != G_N; ++j) {
-                       dumpfile << num_to_lett[get_element(g,i,j)];
-                   }
-               }
-               for (short i = 0; i != G_N; ++i) {
-                   dumpfile << "," << getvertex(*iter,i);
-               }
-               dumpfile << endl;
-           }
-           dumpfile.close();
-           subgraphdump.clear();
-           delete g_ptr;
-      }
-
-      if (nets_ctr == 0){
         std::cout << count_subgr[0] << " subgraphs were "
-               << (fullenumeration ? "enumerated" : "sampled")
-               << " in the original network.";
-      }
+                  << (fullenumeration ? "enumerated" : "sampled")
+                  << " in the original network.";
 
-      // Set the perc_number according to how long the maingraph took.
-      if (nets_ctr == 0) {
-          if (sampling_time < 20)
-              perc_number = 5;
-          if (sampling_time < 5)
-              perc_number = 10;
-          if (sampling_time < 1)
-              perc_number = 50;
-          if (sampling_time < 0.5)
-              perc_number = 0; // Send no percentage events
-          if (sampling_time < 0.1) {
-              netevent_number = int( 1/sampling_time ); // Do not send events every network!
-              if (netevent_number <= 0) netevent_number = 1000;
-          }
-      }
+        // Adjust reporting frequency based on how long the original graph took
+        if (sampling_time < 20)  perc_number = 5;
+        if (sampling_time < 5)   perc_number = 10;
+        if (sampling_time < 1)   perc_number = 50;
+        if (sampling_time < 0.5) perc_number = 0;
+        if (sampling_time < 0.1) {
+            netevent_number = int(1 / sampling_time);
+            if (netevent_number <= 0) netevent_number = 1000;
+        }
 
-       // Write results into result_graphs-hashmap
-       for (hash_map < graphcode64, uint64 >::const_iterator iter = inter_result.begin();
-	        iter !=inter_result.end(); ++iter){
-           if (result_graphs.find(iter->first) == result_graphs.end()){
-               // create the array at the graph's hashmap position.
-               current_array = (result_graphs[iter->first] = new uint64[total_num_nets]);
-               // Initialize the array
-               for (int i=0; i < total_num_nets; ++i)
+        // Merge original-graph results into result_graphs
+        for (hash_map<graphcode64, uint64>::const_iterator iter = inter_result.begin();
+             iter != inter_result.end(); ++iter) {
+            if (result_graphs.find(iter->first) == result_graphs.end()) {
+                current_array = (result_graphs[iter->first] = new uint64[total_num_nets]);
+                for (int i = 0; i < total_num_nets; ++i)
                     current_array[i] = 0;
-           } else {
-               // set current_array as the array at the graphs map position
-               current_array = result_graphs[iter->first];
-           }
-           // Write the number of subgraphs in the array
-           current_array[nets_ctr] = iter->second;
-       } // end for
-       inter_result.clear();       // Empty the intermediate result hashmap.
+            } else {
+                current_array = result_graphs[iter->first];
+            }
+            current_array[0] = iter->second;
+        }
+        inter_result.clear();
+    }
 
-       // Randomize the graph
-       if (num_r_nets != 0) {
+    // -----------------------------------------------------------------------
+    // Phase 1: generate and enumerate random networks in parallel.
+    //
+    // Each thread independently clones the original graph, builds its own
+    // EdgeContainer, runs randomize_graph, and enumerates the result.
+    // No state is shared between threads during these operations.
+    // Results are merged on the main thread after each batch completes.
+    // -----------------------------------------------------------------------
+    if (num_r_nets > 0) {
+        const long base_seed = static_cast<long>(time(NULL));
 
-         if (nets_ctr == 0) {
-            //build EC, needs only be done once because sampling
-            //does not change the edges and hence the content remains
-            //correct
-            short color_u = 1, color_v = 1, color_uv, color_vu;
-            for (hash_map < edge, edgetype >::const_iterator iter = maing.edges.begin();
-                   iter != maing.edges.end(); ++iter) {
-              const edge e = iter->first;
-              if (vertex_color_matters) {
-                 color_u = maing.vertex_colors[edge_get_u(e)];
-                 color_v = maing.vertex_colors[edge_get_v(e)];
-              }
-              const edgetype et = iter->second;
-              if (edge_color_matters) {
-                   color_uv = get_color_u_v(et);
-                   color_vu = get_color_v_u(et);
-              } else {
-                   color_uv = et & DIR_U_T_V;
-                   color_vu = (et & DIR_V_T_U) >> 1;
-              }
-              //Put edge into EC. For NO_REGARD, the bidirectional
-              //edge is split up, additionally, the edge code shows
-              //an edge's direction
-              switch (random_type) {
-                     case NO_REGARD    : if ((et & DIR_U_T_V) == DIR_U_T_V)
-                                            EC.put(new_edge(edge_get_u(e),edge_get_v(e)), getBagID(color_uv, 0 ,color_u,color_v) );
-                                         if ((et & DIR_V_T_U) == DIR_V_T_U)
-                                            EC.put(new_edge(edge_get_v(e),edge_get_u(e)), getBagID( 0 , color_vu ,color_u,color_v) );
-                                         break;
-                     case GLOBAL_CONST : EC.loggedPut(e, getBagID(color_uv,color_vu,color_u,color_v) );
-                                         break;
-                     case LOCAL_CONST  : EC.put(e, getBagID(color_uv,color_vu,color_u,color_v) );
-                                         break;
-              }
-         }
+        for (int batch_start = 1; batch_start <= (int)num_r_nets;
+             batch_start += num_threads) {
 
-         }
-         random_time += randomize_graph(maing, random_type, num_exchanges, num_tries,
-                                        vertex_color_matters, edge_color_matters,
-                                        EC, total_tries, total_success, rand);
-       }
-    } // end for
+            const int batch_end  = std::min(batch_start + num_threads,
+                                            (int)num_r_nets + 1);
+            const int batch_size = batch_end - batch_start;
+
+            std::vector<std::thread>     threads(batch_size);
+            std::vector<RandomNetResult> results(batch_size);
+
+            for (int i = 0; i < batch_size; ++i) {
+                const int  nets_ctr = batch_start + i;
+                // Use a Fibonacci-hash mix of base_seed and nets_ctr so that
+                // each thread gets a well-distributed, collision-free seed even
+                // when base_seed is small or threads are numerous.
+                const long seed = base_seed +
+                    static_cast<long>(nets_ctr) * static_cast<long>(0x9e3779b97f4a7c15LL);
+                threads[i] = std::thread(
+                    [&results, &maing, i, G_N, fullenumeration, &prob,
+                     equiv100p, perc_number, random_type, num_exchanges,
+                     num_tries, vertex_color_matters, edge_color_matters, seed]() {
+                        results[i] = run_random_net(
+                            maing, G_N, fullenumeration, prob,
+                            equiv100p, perc_number,
+                            random_type, num_exchanges, num_tries,
+                            vertex_color_matters, edge_color_matters,
+                            seed);
+                    });
+            }
+
+            // Wait for the batch to complete
+            for (auto& t : threads) t.join();
+
+            // Merge results into the global maps (single-threaded, no races)
+            for (int i = 0; i < batch_size; ++i) {
+                const int nets_ctr = batch_start + i;
+                count_subgr[nets_ctr]  = results[i].count_subgr;
+                total_subgr           += results[i].count_subgr;
+                sampling_time         += results[i].sampling_time;
+                random_time           += results[i].random_time;
+                total_tries           += results[i].tries;
+                total_success         += results[i].success;
+
+                for (hash_map<graphcode64, uint64>::const_iterator it =
+                         results[i].inter_result.begin();
+                     it != results[i].inter_result.end(); ++it) {
+                    if (result_graphs.find(it->first) == result_graphs.end()) {
+                        current_array = (result_graphs[it->first] =
+                                             new uint64[total_num_nets]);
+                        for (int j = 0; j < total_num_nets; ++j)
+                            current_array[j] = 0;
+                    } else {
+                        current_array = result_graphs[it->first];
+                    }
+                    current_array[nets_ctr] = it->second;
+                }
+            }
+        }
+    }
 
 
     // Free memory
