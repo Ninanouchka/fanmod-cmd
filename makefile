@@ -10,28 +10,28 @@ $(NAUTY_DIR)/config.status:
 	if [ ! -d nauty/ ]; then mkdir nauty/; fi
 	wget -O nauty/$(NAUTY_ARCHIVE) $(NAUTY_URL)
 	tar -xf nauty/$(NAUTY_ARCHIVE) --directory nauty/
-	cd $(NAUTY_DIR);./configure;
+	cd $(NAUTY_DIR);./configure --enable-tls;
 
 nauty $(NAUTY_DIR)/dreadnaut $(NAUTY_DIR)/nauty.a $(NAUTY_DIR)/nauty1.a $(NAUTY_DIR)/nautyW.a $(NAUTY_DIR)/nautyW1.a $(NAUTY_DIR)/nautyL.a $(NAUTY_DIR)/nautyL1.a:$(NAUTY_DIR)/config.status
 	make -C $(NAUTY_DIR) checks
 
 main.o:main.cpp
-	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp main.cpp
+	g++ -c -O0 -std=c++11 -Wno-deprecated -Wcpp main.cpp
 
 graph64.o:graph64.cpp
-	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp graph64.cpp
+	g++ -c -O0 -std=c++11 -Wno-deprecated -Wcpp graph64.cpp
 
 output.o:output.cpp
-	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp output.cpp
+	g++ -c -O0 -std=c++11 -Wno-deprecated -Wcpp output.cpp
 
 random.o:random.cpp
-	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp random.cpp
+	g++ -c -O0 -std=c++11 -Wno-deprecated -Wcpp random.cpp
 
 maingraph.o:maingraph.cpp
-	g++ -c -O3 -std=c++11 -Wno-deprecated -Wcpp maingraph.cpp
+	g++ -c -O0 -std=c++11 -Wno-deprecated -Wcpp maingraph.cpp
 
 fanmod_cmd:main.o graph64.o output.o random.o maingraph.o
-	g++ -ggdb -o fanmod_cmd main.o graph64.o output.o random.o maingraph.o $(NAUTY_DIR)/nautyL1.a -lboost_program_options
+	g++ -ggdb -o fanmod_cmd main.o graph64.o output.o random.o maingraph.o $(NAUTY_DIR)/nautyL1.a -lboost_program_options -pthread
 	strip fanmod_cmd
 
 fanmod:fanmod_cmd

@@ -124,7 +124,10 @@ pretty_output(const bool textout, hash_map < graphcode64, uint64* > & res_graphs
             outfile << ",[Random],[Random]";
     outfile << endl << endl;
 
-    graph64 g;
+    // graph64 g;
+    // Heap-allocated to keep the large struct off the stack
+    graph64* g_ptr = new graph64;
+    graph64& g = *g_ptr;
     init_graph(g,G_N,num_v_colors,num_e_colors,directed);
      
     // Datalines of the result table
@@ -187,4 +190,5 @@ pretty_output(const bool textout, hash_map < graphcode64, uint64* > & res_graphs
     } // end for iterator
 
     delete[] concentration;
+    delete g_ptr;
 }

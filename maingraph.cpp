@@ -402,7 +402,11 @@ double sampling(const maingraph & maing, long* v_extension, short G_N,
 {
 
 	// Init workgraph
-	graph64 g;
+	// graph64 g;
+	// Heap-allocated to keep the large struct off the stack
+	graph64* g_ptr = new graph64;
+	graph64& g = *g_ptr;
+	
     init_graph(g,G_N,maing.num_vertex_colors,maing.num_edge_colors,maing.directed); 
 
     // Init for Statusbar
@@ -671,6 +675,8 @@ double sampling(const maingraph & maing, long* v_extension, short G_N,
 	}
     //delete[] scope_place_loc;
 
+    delete g_ptr;
+    
    	// Done with sampling / enumeration: stop the clock, return the time
     return double (clock() - start_time) / CLOCKS_PER_SEC;
 }
