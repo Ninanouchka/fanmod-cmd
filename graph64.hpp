@@ -29,7 +29,7 @@ typedef struct
 	int lab[MAXN], ptn[MAXN], orbits[MAXN];
 	optionblk options;
 	statsblk stats;
-	setword nauty_workspace[160*MAXM];
+	setword nauty_workspace[200*MAXM];
 } graph64;
 
 typedef uint64 graphcode64;

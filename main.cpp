@@ -217,7 +217,8 @@ int main(int argc, char** argv){
            std::ofstream dumpfile ((outputfile+".dump").c_str());
            dumpfile << "Number of subgraphs: " << subgraphdump.size() << endl;
            dumpfile << "Format: adjacency matrix, <participating vertices>" << endl;
-           graph64 g;
+           graph64* g_ptr = new graph64;
+           graph64& g = *g_ptr;
            init_graph(g,G_N,maing.num_vertex_colors,maing.num_edge_colors,maing.directed);
            for (vector<subgraph>::const_iterator iter = subgraphdump.begin();
 	                             iter !=subgraphdump.end(); ++iter) {
@@ -234,6 +235,7 @@ int main(int argc, char** argv){
            }
            dumpfile.close();
            subgraphdump.clear();
+           delete g_ptr;
       }
 
       if (nets_ctr == 0){

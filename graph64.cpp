@@ -63,7 +63,7 @@ graphcode64 toHashCode(graph64 &g) {
 	if ((!g.has_vertex_colors) && (!g.has_edge_colors)) { //graph is not colored
 	
 		nauty(g.nauty_g, g.lab, g.ptn, NILSET, g.orbits, &g.options, &g.stats, 
-			  g.nauty_workspace, 160*MAXM, g.g_M, g.g_N, g.nauty_canon);
+			  g.nauty_workspace, 200*MAXM, g.g_M, g.g_N, g.nauty_canon);
 			  
 		for (int a = 0; a != g.size; ++a) {
 			for (int b = 0; b != g.size; ++b) {
@@ -130,7 +130,7 @@ graphcode64 toHashCode(graph64 &g) {
 
 		//perform nauty
 		nauty(g.nauty_g, g.lab, g.ptn, NILSET, g.orbits, &g.options, &g.stats, 
-			  g.nauty_workspace, 160*MAXM, g.g_M, index, g.nauty_canon);
+			  g.nauty_workspace, 200*MAXM, g.g_M, index, g.nauty_canon);
 
 		//1. g.lab contains permutation
 		
@@ -236,7 +236,7 @@ graphcode64 getGraphID(graph64 &g, graphcode64 gc) {
      g.options.defaultptn = TRUE;
      
  	 nauty(nau_g, g.lab, g.ptn, NILSET, g.orbits, &g.options, &g.stats, 
-			  g.nauty_workspace, 160*MAXM, gm, gn, nau_c);
+			  g.nauty_workspace, 200*MAXM, gm, gn, nau_c);
      
      g.options.defaultptn = (g.has_edge_colors || g.has_vertex_colors) ? FALSE : TRUE;
      
