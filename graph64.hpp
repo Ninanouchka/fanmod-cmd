@@ -27,6 +27,9 @@ typedef struct
 	graph nauty_canon[MAXN * MAXM];
 	graph nauty_g[MAXN * MAXM];
 	int lab[MAXN], ptn[MAXN], orbits[MAXN];
+	optionblk options;
+	statsblk stats;
+	setword nauty_workspace[160*MAXM];
 } graph64;
 
 typedef uint64 graphcode64;

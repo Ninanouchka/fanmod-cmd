@@ -1,9 +1,5 @@
 #include "graph64.hpp"
 
-static DEFAULTOPTIONS(options);
-statsblk(stats);
-setword nauty_workspace[160*MAXM];
-set *nauty_gv;
 static const uint64 ZRO_V_BIT = 0x00UL;
 static const uint64 TWO_V_BIT = 0x01UL;
 static const uint64 THR_V_BIT = 0x02UL;
@@ -16,6 +12,8 @@ static const uint64 E_BIT_MSK = 0x0CUL;
 
 void init_graph(graph64 &g, short size, unsigned short num_vcolors, 
                 unsigned short num_ecolors, bool directed) {
+	DEFAULTOPTIONS(def_opts);
+	g.options = def_opts;
 	for (int i = 0; i!=64 ; ++i) {
 		g.matrix[i] = 0;
 	}
@@ -42,16 +40,16 @@ void init_graph(graph64 &g, short size, unsigned short num_vcolors,
 	g.g_M = (g.g_N + WORDSIZE - 1) / WORDSIZE;
 	for (int i = 0; i != g.g_N; ++i) 
 		EMPTYSET( ( GRAPHROW(g.nauty_g, i, g.g_M) ) , g.g_M);
-	options.writeautoms = FALSE;
-	options.getcanon = TRUE;
+	g.options.writeautoms = FALSE;
+	g.options.getcanon = TRUE;
 
-	options.defaultptn = (g.has_edge_colors || g.has_vertex_colors) ? FALSE : TRUE;
+	g.options.defaultptn = (g.has_edge_colors || g.has_vertex_colors) ? FALSE : TRUE;
 	
 	if (directed) {
-		options.digraph = TRUE;
-		options.invarproc = adjacencies;
-		options.mininvarlevel = 1;
-		options.maxinvarlevel = 10;
+		g.options.digraph = TRUE;
+		g.options.invarproc = adjacencies;
+		g.options.mininvarlevel = 1;
+		g.options.maxinvarlevel = 10;
 	}
 
 	nauty_check(WORDSIZE, g.g_M, g.g_N, NAUTYVERSIONID);
@@ -64,8 +62,8 @@ graphcode64 toHashCode(graph64 &g) {
 	
 	if ((!g.has_vertex_colors) && (!g.has_edge_colors)) { //graph is not colored
 	
-		nauty(g.nauty_g, g.lab, g.ptn, NILSET, g.orbits, &options, &stats, 
-			  nauty_workspace, 160*MAXM, g.g_M, g.g_N, g.nauty_canon);
+		nauty(g.nauty_g, g.lab, g.ptn, NILSET, g.orbits, &g.options, &g.stats, 
+			  g.nauty_workspace, 160*MAXM, g.g_M, g.g_N, g.nauty_canon);
 			  
 		for (int a = 0; a != g.size; ++a) {
 			for (int b = 0; b != g.size; ++b) {
@@ -131,8 +129,8 @@ graphcode64 toHashCode(graph64 &g) {
 		g.ptn[index-1] = 0; //ok since index always nonzero
 
 		//perform nauty
-		nauty(g.nauty_g, g.lab, g.ptn, NILSET, g.orbits, &options, &stats, 
-			  nauty_workspace, 160*MAXM, g.g_M, index, g.nauty_canon);
+		nauty(g.nauty_g, g.lab, g.ptn, NILSET, g.orbits, &g.options, &g.stats, 
+			  g.nauty_workspace, 160*MAXM, g.g_M, index, g.nauty_canon);
 
 		//1. g.lab contains permutation
 		
@@ -235,12 +233,12 @@ graphcode64 getGraphID(graph64 &g, graphcode64 gc) {
          }
      }  
      
-     options.defaultptn = TRUE;
+     g.options.defaultptn = TRUE;
      
- 	 nauty(nau_g, g.lab, g.ptn, NILSET, g.orbits, &options, &stats, 
-			  nauty_workspace, 160*MAXM, gm, gn, nau_c);
+ 	 nauty(nau_g, g.lab, g.ptn, NILSET, g.orbits, &g.options, &g.stats, 
+			  g.nauty_workspace, 160*MAXM, gm, gn, nau_c);
      
-     options.defaultptn = (g.has_edge_colors || g.has_vertex_colors) ? FALSE : TRUE;
+     g.options.defaultptn = (g.has_edge_colors || g.has_vertex_colors) ? FALSE : TRUE;
      
      graphcode64 ret = 0;     
      
