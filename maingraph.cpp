@@ -676,7 +676,7 @@ double sampling(const maingraph & maing, long* v_extension, short G_N,
     //delete[] scope_place_loc;
 
     delete g_ptr;
-    
+
    	// Done with sampling / enumeration: stop the clock, return the time
     return double (clock() - start_time) / CLOCKS_PER_SEC;
 }
@@ -1347,7 +1347,62 @@ if (rm_colors(et) == UNDIR_U_V) {
     return double (clock() - start_time) / CLOCKS_PER_SEC;                     
 } 
 
+// deep-copy for thread independant graphs
+maingraph clone_maingraph(const maingraph& src) {
+    maingraph dst;
+    // Scalar fields
+    dst.n                 = src.n;
+    dst.m                 = src.m;
+    dst.num_nodes         = src.num_nodes;
+    dst.num_lonely_nodes  = src.num_lonely_nodes;
+    dst.num_dir_edges     = src.num_dir_edges;
+    dst.num_undir_edges   = src.num_undir_edges;
+    dst.directed          = src.directed;
+    dst.num_vertex_colors = src.num_vertex_colors;
+    dst.num_edge_colors   = src.num_edge_colors;
+    dst.maxnumneighbours  = src.maxnumneighbours;
+    // Edge map — hash_map supports copy assignment
+    dst.edges = src.edges;
+    // Per-vertex arrays
+    dst.num_neighbours = new unsigned long[src.n + 1];
+    dst.v_util         = new unsigned long[src.n + 1];
+    dst.neighbours     = new vertex*[src.n + 1];
+    for (vertex i = 0; i != src.n; ++i) {
+        dst.num_neighbours[i] = src.num_neighbours[i];
+        dst.v_util[i]         = src.v_util[i];
+        // Allocate exactly as many neighbour slots as the source currently uses.
+        // Randomization preserves the degree sequence, so this is always sufficient.
+        const unsigned long cap = src.num_neighbours[i];
+        dst.neighbours[i] = new vertex[cap > 0 ? cap : 1];
+        for (unsigned long j = 0; j < cap; ++j)
+            dst.neighbours[i][j] = src.neighbours[i][j];
+    }
+    // The (n)-th slot is allocated but unused; zero-initialise for safety.
+    dst.num_neighbours[src.n] = 0;
+    dst.v_util[src.n]         = NILLVERTEX;
+    dst.neighbours[src.n]     = nullptr;
+    // vertex-colour array
+    if (src.num_vertex_colors > 1) {
+        dst.vertex_colors = new short[src.n + 1];
+        for (vertex i = 0; i <= src.n; ++i)
+            dst.vertex_colors[i] = src.vertex_colors[i];
+    } else {
+        dst.vertex_colors = nullptr;
+    }
+    return dst;
+}
 
+// free memory of thread independant graphs
+void free_maingraph(maingraph& m) {
+    m.edges.clear();
+    for (vertex i = 0; i != m.n; ++i)
+        delete[] m.neighbours[i];
+    delete[] m.num_neighbours;
+    delete[] m.neighbours;
+    delete[] m.v_util;
+    if (m.num_vertex_colors > 1)
+        delete[] m.vertex_colors;
+}
 
 
 

@@ -215,6 +215,10 @@ double randomize_graph(maingraph & maing, short random_type,
                      EdgeContainer & EC, long & total_tries, long & total_success,
                      randlib::rand &rand);
 
+// for thread-assigned graph copies
+maingraph clone_maingraph(const maingraph& src);
+void      free_maingraph (maingraph& m); 
+
 // For the percentage event:
 #define ID_PERCENT_REACHED 103
 
