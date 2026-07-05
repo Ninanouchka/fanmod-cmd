@@ -1,5 +1,5 @@
 # fanmod-cmd
-Fork^2 of the fanmod tool that supports command line execution and an updated build 
+Fork^3 of the fanmod tool that supports command line execution and an updated build 
 process.
 
 
